@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Suivi copro — charges de copropriété</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --ink:#1e293b; --muted:#64748b;
+    --line:#e2e8f0; --brand:#2563eb; --brand-d:#1d4ed8;
+    --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --soft:#eff4ff;
+    --radius:14px; --shadow:0 1px 3px rgba(15,23,42,.08),0 8px 24px rgba(15,23,42,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45}
+  a{color:var(--brand)}
+  button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:9px 14px;
+         background:var(--brand);color:#fff;font-weight:600;transition:.15s}
+  button:hover{background:var(--brand-d)}
+  button.ghost{background:transparent;color:var(--brand);border:1px solid var(--line)}
+  button.ghost:hover{background:var(--soft)}
+  button.danger{background:transparent;color:var(--bad);border:1px solid #fecaca}
+  button.danger:hover{background:#fef2f2}
+  button.sm{padding:5px 10px;font-size:13px}
+  input,select,textarea{font:inherit;width:100%;padding:9px 11px;border:1px solid var(--line);
+         border-radius:10px;background:#fff;color:var(--ink)}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--soft);border-color:var(--brand)}
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 0 5px}
+  .field{margin-bottom:13px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:140px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+        box-shadow:var(--shadow);padding:20px}
+  .muted{color:var(--muted)}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  .pill.ok{background:#dcfce7;color:#166534}
+  .pill.warn{background:#fef3c7;color:#92400e}
+  .pill.partiel{background:#e0e7ff;color:#3730a3}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:11px 10px;border-bottom:1px solid var(--line);font-size:14px}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  tr:hover td{background:#fafbff}
+  .right{text-align:right}
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  header.top{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  .top-in{max-width:1100px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:16px}
+  .brand{font-weight:800;font-size:17px;display:flex;align-items:center;gap:9px}
+  .brand .logo{width:30px;height:30px;border-radius:9px;background:var(--brand);color:#fff;
+        display:grid;place-items:center;font-size:16px}
+  nav{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  nav button{background:transparent;color:var(--muted);font-weight:600}
+  nav button.active{background:var(--soft);color:var(--brand)}
+  main{max-width:1100px;margin:0 auto;padding:22px 20px 60px}
+  h1{font-size:22px;margin:0 0 4px}
+  h2{font-size:17px;margin:0 0 14px}
+  .sub{color:var(--muted);margin:0 0 22px}
+  .grid{display:grid;gap:16px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+  .kpi .v{font-size:26px;font-weight:800;margin-top:6px}
+  .kpi .l{font-size:13px;color:var(--muted);font-weight:600}
+  .sec{margin-top:26px}
+  .empty{text-align:center;color:var(--muted);padding:40px 20px}
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:grid;place-items:center;
+           padding:20px;z-index:50}
+  .modal{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);width:100%;
+         max-width:640px;max-height:90vh;overflow:auto;padding:24px}
+  .modal h2{display:flex;justify-content:space-between;align-items:center}
+  .modal .x{background:transparent;color:var(--muted);font-size:20px;padding:0 6px}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+  .bar .grow{flex:1}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;
+         padding:12px 18px;border-radius:12px;z-index:80;box-shadow:var(--shadow);font-weight:600;
+         opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  .toast.bad{background:var(--bad)}
+  .dz{border:2px dashed var(--line);border-radius:12px;padding:22px;text-align:center;color:var(--muted);
+      background:#fafbff;cursor:pointer}
+  .dz.drag{border-color:var(--brand);background:var(--soft);color:var(--brand)}
+  .copro-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:middle}
+  .login-wrap{min-height:100vh;display:grid;place-items:center;padding:20px}
+  .login-card{max-width:400px;width:100%}
+  .hidden{display:none!important}
+  .barbar{height:9px;border-radius:6px;background:var(--line);overflow:hidden}
+  .barbar>i{display:block;height:100%;background:var(--ok)}
+  code{background:#f1f5f9;padding:2px 6px;border-radius:6px;font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- ===================== ÉCRAN CONFIG / CONNEXION ===================== -->
+<div id="gate" class="login-wrap">
+  <div class="card login-card">
+    <div class="brand" style="margin-bottom:18px"><span class="logo">€</span> Suivi copro</div>
+
+    <div id="needConfig">
+      <p class="muted">Première utilisation : renseignez l'adresse de votre projet Supabase.
+        On les trouve dans Supabase &gt; <b>Project Settings &gt; API</b>.</p>
+      <div class="field"><label>URL du projet</label>
+        <input id="cfgUrl" placeholder="https://xxxx.supabase.co"></div>
+      <div class="field"><label>Clé publique « anon »</label>
+        <input id="cfgKey" placeholder="eyJhbGci..."></div>
+      <button id="cfgSave">Enregistrer</button>
+      <p class="muted" style="font-size:12px;margin-top:12px">Ces informations sont stockées
+        uniquement sur cet appareil (navigateur). La clé « anon » est publique par nature ;
+        vos données restent protégées par la connexion ci-dessous et la sécurité RLS.</p>
+    </div>
+
+    <div id="needLogin" class="hidden">
+      <p class="muted">Connectez-vous pour accéder à vos charges.</p>
+      <div class="field"><label>Email</label><input id="logEmail" type="email" autocomplete="username"></div>
+      <div class="field"><label>Mot de passe</label><input id="logPass" type="password" autocomplete="current-password"></div>
+      <div class="row">
+        <button id="btnLogin">Se connecter</button>
+        <button id="btnSignup" class="ghost">Créer mon compte</button>
+      </div>
+      <p id="loginMsg" class="muted" style="margin-top:12px"></p>
+      <button id="cfgReset" class="ghost sm" style="margin-top:14px">Changer de projet Supabase</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APPLICATION ===================== -->
+<div id="app" class="hidden">
+  <header class="top">
+    <div class="top-in">
+      <div class="brand"><span class="logo">€</span> Suivi copro</div>
+      <nav>
+        <button data-view="dashboard" class="active">Tableau de bord</button>
+        <button data-view="appels">Appels de charges</button>
+        <button data-view="copros">Mes copropriétés</button>
+      </nav>
+      <button id="btnLogout" class="ghost sm">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- DASHBOARD -->
+    <section id="view-dashboard">
+      <h1>Tableau de bord</h1>
+      <p class="sub" id="dashSub">Vue d'ensemble de vos charges de copropriété.</p>
+      <div id="importBanner"></div>
+      <div class="grid kpis" id="kpis"></div>
+      <div class="sec card">
+        <h2>Solde par copropriété</h2>
+        <div id="dashByCopro"></div>
+      </div>
+      <div class="sec card">
+        <h2>Derniers appels</h2>
+        <div id="dashRecent"></div>
+      </div>
+    </section>
+
+    <!-- APPELS -->
+    <section id="view-appels" class="hidden">
+      <div class="bar">
+        <div><h1>Appels de charges</h1></div>
+        <div class="grow"></div>
+        <select id="filtCopro" style="max-width:220px"></select>
+        <select id="filtStatut" style="max-width:170px">
+          <option value="">Tous les statuts</option>
+          <option value="en_attente">En attente</option>
+          <option value="partiel">Partiel</option>
+          <option value="paye">Payé</option>
+        </select>
+        <button id="btnNewAppel">+ Nouvel appel</button>
+      </div>
+      <div class="card"><div id="appelsList"></div></div>
+    </section>
+
+    <!-- COPROS -->
+    <section id="view-copros" class="hidden">
+      <div class="bar">
+        <div><h1>Mes copropriétés</h1></div>
+        <div class="grow"></div>
+        <button id="btnNewCopro">+ Ajouter une copropriété</button>
+      </div>
+      <div class="grid" id="coprosList" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))"></div>
+    </section>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast" class="toast"></div>
+
+<!-- Librairies (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs";
+window.__pdfjs = pdfjsLib;
+</script>
+
+<script>
+/* ============================================================
+   CONFIG & ÉTAT
+   ============================================================ */
+const LS = { url:"cb_sb_url", key:"cb_sb_key" };
+let sb = null;
+let USER = null;
+const CATS = ["Charges courantes","Fonds de travaux (ALUR)","Travaux exceptionnels",
+            "Chauffage / Eau","Assurance","Honoraires syndic","Autres"];
+let state = { copros:[], appels:[], view:"dashboard", filtCopro:"", filtStatut:"" };
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const eur = n => (Number(n)||0).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
+const dfr = d => d ? new Date(d).toLocaleDateString("fr-FR") : "—";
+const esc = s => (s??"").toString().replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function toast(msg,bad){const t=$("#toast");t.textContent=msg;t.className="toast show"+(bad?" bad":"");
+  setTimeout(()=>t.className="toast",2600);}
+
+/* ============================================================
+   DÉMARRAGE
+   ============================================================ */
+function initClient(){
+  const url=localStorage.getItem(LS.url), key=localStorage.getItem(LS.key);
+  if(!url||!key) return false;
+  sb = window.supabase.createClient(url,key);
+  return true;
+}
+
+async function boot(){
+  if(!initClient()){ showGate("config"); return; }
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session){ USER=session.user; await startApp(); }
+  else showGate("login");
+  sb.auth.onAuthStateChange((_e,s)=>{ if(!s){ USER=null; } });
+}
+
+function showGate(stage){
+  $("#app").classList.add("hidden");
+  $("#gate").classList.remove("hidden");
+  $("#needConfig").classList.toggle("hidden", stage!=="config");
+  $("#needLogin").classList.toggle("hidden", stage!=="login");
+}
+
+$("#cfgSave").onclick=()=>{
+  const url=$("#cfgUrl").value.trim().replace(/\/$/,""), key=$("#cfgKey").value.trim();
+  if(!url||!key) return toast("URL et clé requises",true);
+  localStorage.setItem(LS.url,url); localStorage.setItem(LS.key,key);
+  if(initClient()) showGate("login");
+};
+$("#cfgReset").onclick=()=>{ localStorage.removeItem(LS.url); localStorage.removeItem(LS.key);
+  $("#cfgUrl").value=""; $("#cfgKey").value=""; showGate("config"); };
+
+$("#btnLogin").onclick=async()=>{
+  const email=$("#logEmail").value.trim(), password=$("#logPass").value;
+  $("#loginMsg").textContent="Connexion…";
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  if(error){ $("#loginMsg").textContent="Échec : "+error.message; return; }
+  const {data:{session}}=await sb.auth.getSession(); USER=session.user; await startApp();
+};
+$("#btnSignup").onclick=async()=>{
+  const email=$("#logEmail").value.trim(), password=$("#logPass").value;
+  if(password.length<6) return $("#loginMsg").textContent="Mot de passe : 6 caractères minimum.";
+  $("#loginMsg").textContent="Création du compte…";
+  const {data,error}=await sb.auth.signUp({email,password});
+  if(error){ $("#loginMsg").textContent="Échec : "+error.message; return; }
+  if(data.session){ USER=data.session.user; await startApp(); }
+  else $("#loginMsg").textContent="Compte créé. Vérifiez vos emails pour confirmer, puis connectez-vous.";
+};
+$("#btnLogout").onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
+
+/* ============================================================
+   DONNÉES
+   ============================================================ */
+async function startApp(){
+  $("#gate").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+  await loadAll();
+  if(state.copros.length===0) await seedCopros();
+  render();
+}
+
+async function loadAll(){
+  const [c,a]=await Promise.all([
+    sb.from("copro_coproprietes").select("*").order("created_at"),
+    sb.from("copro_appels").select("*, coproprietes:copro_coproprietes(nom,type,couleur), paiements:copro_paiements(montant), postes:copro_postes(*)")
+      .order("date_exigibilite",{ascending:false,nullsFirst:false})
+  ]);
+  if(c.error) return toast(c.error.message,true);
+  if(a.error) return toast(a.error.message,true);
+  state.copros=c.data||[];
+  state.appels=(a.data||[]).map(x=>({
+    ...x,
+    total_paye:(x.paiements||[]).reduce((s,p)=>s+Number(p.montant||0),0)
+  }));
+}
+
+async function seedCopros(){
+  const def=[
+    {nom:"Appartement — AURELIA 1",type:"appartement",couleur:"#2563eb",
+     adresse:"15 rue Jeanne Maillotte, 59110 La Madeleine",syndic_nom:"Vacherand (ex-Sergic)"},
+    {nom:"Parking — PARKINGS P6",type:"parking",couleur:"#16a34a",
+     adresse:"La Madeleine",syndic_nom:"Sergic"}
+  ];
+  const {error}=await sb.from("copro_coproprietes").insert(def);
+  if(error){ toast(error.message,true); return; }
+  await loadAll();
+  toast("Vos 2 copropriétés ont été créées ✓");
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+$$("nav button").forEach(b=>b.onclick=()=>{ state.view=b.dataset.view;
+  $$("nav button").forEach(x=>x.classList.toggle("active",x===b)); render(); });
+
+function render(){
+  ["dashboard","appels","copros"].forEach(v=>
+    $("#view-"+v).classList.toggle("hidden", v!==state.view));
+  if(state.view==="dashboard") renderDashboard();
+  if(state.view==="appels")    renderAppels();
+  if(state.view==="copros")    renderCopros();
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+function statutInfo(a){
+  const solde=Number(a.montant_total)-Number(a.total_paye||0);
+  if(solde<=0.005 && Number(a.montant_total)>0) return {cls:"ok",txt:"Payé"};
+  if(a.total_paye>0) return {cls:"partiel",txt:"Partiel"};
+  return {cls:"warn",txt:"En attente"};
+}
+
+function renderDashboard(){
+  // bannière d'import de l'historique (visible tant qu'aucun appel n'existe)
+  const ib=$("#importBanner");
+  if(ib) ib.innerHTML = state.appels.length===0 ? `
+    <div class="card" style="border-left:4px solid var(--brand);background:var(--soft);margin-bottom:18px">
+      <b>📥 Importer votre historique</b>
+      <p class="muted" style="margin:6px 0 12px">10 appels de charges relevés depuis vos PDF Vacherand et Sergic
+        (appartement + parking, 2024 → 2026) sont prêts à être enregistrés.</p>
+      <button id="btnImport">Importer mon historique</button>
+      <span class="muted" style="font-size:12px;margin-left:10px">Vous pourrez tout vérifier et modifier ensuite.</span>
+    </div>` : "";
+  const bi=$("#btnImport"); if(bi) bi.onclick=importHistorique;
+
+  const total=state.appels.reduce((s,a)=>s+Number(a.montant_total||0),0);
+  const paye =state.appels.reduce((s,a)=>s+Number(a.total_paye||0),0);
+  const du=total-paye;
+  const annee=new Date().getFullYear();
+  const totalAnnee=state.appels.filter(a=>a.annee===annee)
+        .reduce((s,a)=>s+Number(a.montant_total||0),0);
+  $("#kpis").innerHTML=[
+    kpi("Total appelé",eur(total)),
+    kpi("Déjà payé",eur(paye)),
+    kpi("Reste à payer",eur(du),du>0.005?"warn":"ok"),
+    kpi("Appelé en "+annee,eur(totalAnnee)),
+  ].join("");
+
+  $("#dashByCopro").innerHTML = state.copros.length? state.copros.map(c=>{
+    const ap=state.appels.filter(a=>a.copro_id===c.id);
+    const t=ap.reduce((s,a)=>s+Number(a.montant_total||0),0);
+    const p=ap.reduce((s,a)=>s+Number(a.total_paye||0),0);
+    const pct=t>0?Math.min(100,Math.round(p/t*100)):0;
+    return `<div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <b><span class="copro-dot" style="background:${esc(c.couleur)}"></span>${esc(c.nom)}</b>
+        <span class="num muted">${eur(p)} / ${eur(t)} payés</span></div>
+      <div class="barbar"><i style="width:${pct}%"></i></div></div>`;
+  }).join("") : `<p class="empty">Aucune copropriété.</p>`;
+
+  const r=state.appels.slice(0,6);
+  $("#dashRecent").innerHTML = r.length? tableHtml(r,true) : `<p class="empty">Aucun appel enregistré pour l'instant.</p>`;
+}
+function kpi(l,v,tone){return `<div class="card kpi"><div class="l">${l}</div>
+  <div class="v" ${tone==="warn"?'style="color:var(--warn)"':tone==="ok"?'style="color:var(--ok)"':''}>${v}</div></div>`;}
+
+/* ============================================================
+   LISTE DES APPELS
+   ============================================================ */
+function renderAppels(){
+  const sel=$("#filtCopro");
+  sel.innerHTML=`<option value="">Toutes les copropriétés</option>`+
+    state.copros.map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join("");
+  sel.value=state.filtCopro; $("#filtStatut").value=state.filtStatut;
+  sel.onchange=()=>{state.filtCopro=sel.value;renderAppels();};
+  $("#filtStatut").onchange=()=>{state.filtStatut=$("#filtStatut").value;renderAppels();};
+
+  let list=state.appels;
+  if(state.filtCopro) list=list.filter(a=>a.copro_id===state.filtCopro);
+  if(state.filtStatut) list=list.filter(a=>statutKey(a)===state.filtStatut);
+  $("#appelsList").innerHTML = list.length? tableHtml(list,true)
+    : `<p class="empty">Aucun appel. Cliquez sur « + Nouvel appel » pour en ajouter un (ou importer un PDF).</p>`;
+}
+function statutKey(a){const i=statutInfo(a); return i.cls==="ok"?"paye":i.cls==="partiel"?"partiel":"en_attente";}
+
+function tableHtml(rows,withActions){
+  return `<table><thead><tr>
+    <th>Copropriété</th><th>Période</th><th>Exigibilité</th>
+    <th class="right">Montant</th><th class="right">Reste dû</th><th>Statut</th>
+    ${withActions?'<th></th>':''}</tr></thead><tbody>${
+    rows.map(a=>{
+      const c=a.coproprietes||{}; const i=statutInfo(a);
+      const solde=Number(a.montant_total)-Number(a.total_paye||0);
+      return `<tr>
+        <td><span class="copro-dot" style="background:${esc(c.couleur||'#888')}"></span>${esc(c.nom||"—")}</td>
+        <td>${esc(a.periode_libelle||(a.annee?("T"+(a.trimestre||"?")+" "+a.annee):"—"))}</td>
+        <td>${dfr(a.date_exigibilite)}</td>
+        <td class="right num">${eur(a.montant_total)}</td>
+        <td class="right num">${solde>0.005?eur(solde):"—"}</td>
+        <td><span class="pill ${i.cls}">${i.txt}</span></td>
+        ${withActions?`<td class="right"><button class="ghost sm" onclick="openAppel('${a.id}')">Ouvrir</button></td>`:''}
+      </tr>`;
+    }).join("")}</tbody></table>`;
+}
+
+/* ============================================================
+   COPROPRIÉTÉS
+   ============================================================ */
+function renderCopros(){
+  $("#coprosList").innerHTML = state.copros.map(c=>{
+    const ap=state.appels.filter(a=>a.copro_id===c.id);
+    const t=ap.reduce((s,a)=>s+Number(a.montant_total||0),0);
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <div><b style="font-size:16px"><span class="copro-dot" style="background:${esc(c.couleur)}"></span>${esc(c.nom)}</b>
+          <div class="muted" style="margin-top:4px;text-transform:capitalize">${esc(c.type)}</div></div>
+      </div>
+      <div class="muted" style="margin:12px 0;font-size:13px">
+        ${c.adresse?esc(c.adresse)+"<br>":""}${c.syndic_nom?"Syndic : "+esc(c.syndic_nom):""}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="muted">${ap.length} appel(s) · ${eur(t)}</span>
+        <button class="ghost sm" onclick="openCopro('${c.id}')">Modifier</button>
+      </div></div>`;
+  }).join("") || `<p class="empty">Aucune copropriété.</p>`;
+}
+
+/* ============================================================
+   MODALES
+   ============================================================ */
+function modal(html){
+  $("#modalRoot").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">${html}</div></div>`;
+}
+window.closeModal=()=>$("#modalRoot").innerHTML="";
+
+/* ---------- COPRO ---------- */
+window.openCopro=(id)=>{
+  const c=id?state.copros.find(x=>x.id===id):{type:"appartement",couleur:"#2563eb"};
+  modal(`<h2>${id?"Modifier":"Nouvelle"} copropriété <button class="x" onclick="closeModal()">×</button></h2>
+    <div class="field"><label>Nom</label><input id="c_nom" value="${esc(c.nom||"")}"></div>
+    <div class="row">
+      <div class="field"><label>Type</label><select id="c_type">
+        ${["appartement","parking","autre"].map(t=>`<option ${c.type===t?"selected":""}>${t}</option>`).join("")}
+      </select></div>
+      <div class="field"><label>Couleur</label><input id="c_col" type="color" value="${esc(c.couleur||"#2563eb")}" style="height:40px;padding:4px"></div>
+    </div>
+    <div class="field"><label>Adresse</label><input id="c_adr" value="${esc(c.adresse||"")}"></div>
+    <div class="row">
+      <div class="field"><label>Syndic</label><input id="c_syn" value="${esc(c.syndic_nom||"")}"></div>
+      <div class="field"><label>Quote-part (tantièmes)</label><input id="c_qp" type="number" value="${c.quote_part??""}"></div>
+    </div>
+    <div class="bar" style="margin-top:8px">
+      ${id?`<button class="danger" onclick="delCopro('${id}')">Supprimer</button>`:""}
+      <div class="grow"></div>
+      <button class="ghost" onclick="closeModal()">Annuler</button>
+      <button onclick="saveCopro('${id||""}')">Enregistrer</button>
+    </div>`);
+};
+window.saveCopro=async(id)=>{
+  const p={nom:$("#c_nom").value.trim(),type:$("#c_type").value,couleur:$("#c_col").value,
+    adresse:$("#c_adr").value.trim()||null,syndic_nom:$("#c_syn").value.trim()||null,
+    quote_part:$("#c_qp").value?Number($("#c_qp").value):null};
+  if(!p.nom) return toast("Le nom est requis",true);
+  const q=id? sb.from("copro_coproprietes").update(p).eq("id",id)
+            : sb.from("copro_coproprietes").insert(p);
+  const {error}=await q; if(error) return toast(error.message,true);
+  closeModal(); await loadAll(); render(); toast("Enregistré ✓");
+};
+window.delCopro=async(id)=>{
+  if(!confirm("Supprimer cette copropriété et tous ses appels ?")) return;
+  const {error}=await sb.from("copro_coproprietes").delete().eq("id",id);
+  if(error) return toast(error.message,true);
+  closeModal(); await loadAll(); render(); toast("Supprimé");
+};
+$("#btnNewCopro").onclick=()=>openCopro();
+
+/* ---------- APPEL ---------- */
+$("#btnNewAppel").onclick=()=>openAppel();
+
+window.openAppel=(id)=>{
+  const a=id?state.appels.find(x=>x.id===id):{statut:"en_attente",postes:[],paiements:[]};
+  const coproOpts=state.copros.map(c=>
+    `<option value="${c.id}" ${a.copro_id===c.id?"selected":""}>${esc(c.nom)}</option>`).join("");
+  modal(`<h2>${id?"Appel de charges":"Nouvel appel"} <button class="x" onclick="closeModal()">×</button></h2>
+
+    <div class="dz" id="dz">📄 <b>${id?"Joindre / remplacer le PDF":"Importer un PDF du syndic"}</b><br>
+       <span style="font-size:13px">cliquez ou glissez le fichier ici${id?"":" — les champs seront pré-remplis"}</span>
+       <input id="pdfInput" type="file" accept="application/pdf" class="hidden"></div>
+    <div id="pdfStatus" class="muted" style="margin:8px 0;font-size:13px"></div>
+
+    <div class="row">
+      <div class="field"><label>Copropriété</label><select id="a_copro">${coproOpts}</select></div>
+      <div class="field"><label>Statut</label><select id="a_statut">
+        ${[["en_attente","En attente"],["partiel","Partiel"],["paye","Payé"]]
+          .map(([v,l])=>`<option value="${v}" ${a.statut===v?"selected":""}>${l}</option>`).join("")}
+      </select></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Période (libellé)</label>
+        <input id="a_per" placeholder="ex : 2e trimestre 2026" value="${esc(a.periode_libelle||"")}"></div>
+      <div class="field" style="max-width:110px"><label>Année</label>
+        <input id="a_an" type="number" value="${a.annee||new Date().getFullYear()}"></div>
+      <div class="field" style="max-width:110px"><label>Trimestre</label>
+        <select id="a_tri">${[1,2,3,4].map(t=>`<option value="${t}" ${a.trimestre===t?"selected":""}>T${t}</option>`).join("")}</select></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Date d'émission</label><input id="a_em" type="date" value="${a.date_emission||""}"></div>
+      <div class="field"><label>Date d'exigibilité</label><input id="a_ex" type="date" value="${a.date_exigibilite||""}"></div>
+    </div>
+
+    <div class="field"><label>Détail par poste</label>
+      <div id="postesBox"></div>
+      <button class="ghost sm" onclick="addPoste()">+ Ajouter un poste</button>
+    </div>
+    <div class="field"><label>Montant total</label>
+      <input id="a_tot" type="number" step="0.01" value="${a.montant_total||0}">
+      <span class="muted" style="font-size:12px">Calculé automatiquement à partir des postes, ajustable.</span></div>
+
+    ${id?paiementsBlock(a):""}
+
+    <div class="field"><label>Notes</label><textarea id="a_notes" rows="2">${esc(a.notes||"")}</textarea></div>
+    ${a.pdf_path?`<p class="muted" style="font-size:13px">📎 PDF joint —
+       <a href="#" onclick="dlPdf('${esc(a.pdf_path)}');return false">télécharger</a></p>`:""}
+
+    <div class="bar" style="margin-top:8px">
+      ${id?`<button class="danger" onclick="delAppel('${id}')">Supprimer</button>`:""}
+      <div class="grow"></div>
+      <button class="ghost" onclick="closeModal()">Annuler</button>
+      <button onclick="saveAppel('${id||""}')">Enregistrer</button>
+    </div>`);
+
+  window.__postes = (a.postes&&a.postes.length)? a.postes.map(p=>({categorie:p.categorie,libelle:p.libelle||"",montant:p.montant})) : [];
+  window.__pdfFile = null;
+  window.__isNew = !id;     // n'auto-remplit les champs que pour un nouvel appel
+  renderPostes();
+  setupDropzone();
+};
+
+function paiementsBlock(a){
+  const solde=Number(a.montant_total)-Number(a.total_paye||0);
+  return `<div class="field"><label>Paiements</label>
+    <div id="paieBox">${(a.paiements||[]).map(p=>
+      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)">
+        <span>${dfr(p.date_paiement)} · ${esc(p.moyen||"—")}</span>
+        <b class="num">${eur(p.montant)}</b></div>`).join("")||'<span class="muted">Aucun paiement.</span>'}
+    </div>
+    <div class="muted" style="margin:8px 0">Reste dû : <b>${eur(solde)}</b></div>
+    <div class="row" style="align-items:end">
+      <div class="field" style="margin:0"><label>Ajouter — montant</label><input id="pay_m" type="number" step="0.01" placeholder="${solde>0?solde.toFixed(2):''}"></div>
+      <div class="field" style="margin:0"><label>Date</label><input id="pay_d" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field" style="margin:0"><label>Moyen</label><input id="pay_y" placeholder="virement"></div>
+      <button class="ghost" onclick="addPaiement('${a.id}')">Ajouter</button>
+    </div></div>`;
+}
+window.addPaiement=async(appelId)=>{
+  const montant=Number($("#pay_m").value);
+  if(!montant) return toast("Montant requis",true);
+  const {error}=await sb.from("copro_paiements").insert({appel_id:appelId,montant,
+    date_paiement:$("#pay_d").value||null,moyen:$("#pay_y").value.trim()||null});
+  if(error) return toast(error.message,true);
+  await refreshStatut(appelId);
+  await loadAll(); render();
+  const fresh=state.appels.find(x=>x.id===appelId); openAppel(appelId);
+  toast("Paiement ajouté ✓");
+};
+async function refreshStatut(appelId){
+  const a=state.appels.find(x=>x.id===appelId); if(!a) return;
+  const {data}=await sb.from("copro_paiements").select("montant").eq("appel_id",appelId);
+  const paye=(data||[]).reduce((s,p)=>s+Number(p.montant||0),0);
+  const st = paye<=0?"en_attente" : (paye+0.005>=Number(a.montant_total)?"paye":"partiel");
+  await sb.from("copro_appels").update({statut:st}).eq("id",appelId);
+}
+
+function renderPostes(){
+  const box=$("#postesBox"); if(!box) return;
+  box.innerHTML=window.__postes.map((p,i)=>`
+    <div class="row" style="margin-bottom:7px">
+      <select onchange="window.__postes[${i}].categorie=this.value" style="flex:2">
+        ${CATS.map(c=>`<option ${p.categorie===c?"selected":""}>${c}</option>`).join("")}
+      </select>
+      <input placeholder="libellé (optionnel)" value="${esc(p.libelle||"")}"
+        oninput="window.__postes[${i}].libelle=this.value" style="flex:2">
+      <input type="number" step="0.01" value="${p.montant||0}" style="flex:1"
+        oninput="window.__postes[${i}].montant=this.value;sumPostes()">
+      <button class="ghost sm" onclick="window.__postes.splice(${i},1);renderPostes();sumPostes()">✕</button>
+    </div>`).join("");
+}
+window.addPoste=()=>{ window.__postes.push({categorie:CATS[0],libelle:"",montant:0}); renderPostes(); };
+window.sumPostes=()=>{
+  const s=window.__postes.reduce((a,p)=>a+Number(p.montant||0),0);
+  if(s>0) $("#a_tot").value=s.toFixed(2);
+};
+
+window.saveAppel=async(id)=>{
+  const payload={
+    copro_id:$("#a_copro").value, statut:$("#a_statut").value,
+    periode_libelle:$("#a_per").value.trim()||null,
+    annee:$("#a_an").value?Number($("#a_an").value):null,
+    trimestre:$("#a_tri").value?Number($("#a_tri").value):null,
+    date_emission:$("#a_em").value||null, date_exigibilite:$("#a_ex").value||null,
+    montant_total:Number($("#a_tot").value||0), notes:$("#a_notes").value.trim()||null
+  };
+  if(!payload.copro_id) return toast("Choisissez une copropriété",true);
+
+  if(window.__pdfFile){
+    const path=`${USER.id}/${Date.now()}_${window.__pdfFile.name.replace(/[^\w.\-]/g,"_")}`;
+    const up=await sb.storage.from("copro-appels-pdf").upload(path,window.__pdfFile);
+    if(up.error) toast("PDF non envoyé : "+up.error.message,true);
+    else payload.pdf_path=path;
+  }
+
+  let appelId=id;
+  if(id){ const {error}=await sb.from("copro_appels").update(payload).eq("id",id); if(error) return toast(error.message,true); }
+  else  { const {data,error}=await sb.from("copro_appels").insert(payload).select("id").single();
+          if(error) return toast(error.message,true); appelId=data.id; }
+
+  await sb.from("copro_postes").delete().eq("appel_id",appelId);
+  const ps=window.__postes.filter(p=>Number(p.montant)||p.libelle)
+        .map(p=>({appel_id:appelId,categorie:p.categorie,libelle:p.libelle||null,montant:Number(p.montant||0)}));
+  if(ps.length){ const {error}=await sb.from("copro_postes").insert(ps); if(error) toast(error.message,true); }
+
+  closeModal(); await loadAll(); render(); toast("Appel enregistré ✓");
+};
+window.delAppel=async(id)=>{
+  if(!confirm("Supprimer cet appel de charges ?")) return;
+  const {error}=await sb.from("copro_appels").delete().eq("id",id);
+  if(error) return toast(error.message,true);
+  closeModal(); await loadAll(); render(); toast("Supprimé");
+};
+
+window.dlPdf=async(path)=>{
+  const {data,error}=await sb.storage.from("copro-appels-pdf").createSignedUrl(path,120);
+  if(error) return toast(error.message,true);
+  window.open(data.signedUrl,"_blank");
+};
+
+/* ============================================================
+   IMPORT / LECTURE PDF
+   ============================================================ */
+function setupDropzone(){
+  const dz=$("#dz"), inp=$("#pdfInput"); if(!dz) return;
+  dz.onclick=()=>inp.click();
+  inp.onchange=()=>inp.files[0]&&handlePdf(inp.files[0]);
+  ["dragover","dragenter"].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.add("drag");}));
+  ["dragleave","drop"].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.remove("drag");}));
+  dz.addEventListener("drop",ev=>{ev.preventDefault();const f=ev.dataTransfer.files[0];if(f)handlePdf(f);});
+}
+
+async function handlePdf(file){
+  window.__pdfFile=file;
+  $("#pdfStatus").textContent="Lecture du PDF…";
+  try{
+    const buf=await file.arrayBuffer();
+    const pdf=await window.__pdfjs.getDocument({data:buf}).promise;
+    let text="";
+    for(let i=1;i<=pdf.numPages;i++){
+      const page=await pdf.getPage(i);
+      const tc=await page.getTextContent();
+      text+=tc.items.map(it=>it.str).join(" ")+"\n";
+    }
+    if(window.__isNew){
+      const ext=extractFromText(text);
+      applyExtraction(ext);
+      $("#pdfStatus").innerHTML=`✅ PDF « ${esc(file.name)} » lu et joint. `+
+        (ext.found?`Champs pré-remplis — <b>vérifiez puis enregistrez</b>.`:`Texte non reconnu automatiquement : saisissez les montants manuellement (le PDF reste joint).`);
+    }else{
+      $("#pdfStatus").innerHTML=`✅ PDF « ${esc(file.name)} » prêt à être joint. <b>Cliquez Enregistrer</b> pour l'attacher à cet appel.`;
+    }
+  }catch(e){
+    $("#pdfStatus").textContent="Lecture impossible (PDF peut-être scanné/image). Le fichier sera tout de même joint ; saisissez les montants à la main.";
+  }
+}
+
+/* Extraction heuristique — à calibrer avec un vrai PDF du syndic */
+function extractFromText(t){
+  const res={found:false};
+  const flat=t.replace(/\s+/g," ");
+  const mKey=flat.match(/(?:total\s+(?:à payer|appel|d[ûu])|montant\s+(?:total|d[ûu]|appel[ée]?)|net à payer|appel de (?:fonds|charges))[^\d]{0,20}([\d\s.]+,\d{2})/i);
+  let montant = mKey ? mKey[1] : null;
+  if(!montant){
+    const all=[...flat.matchAll(/([\d]{1,3}(?:[ .]\d{3})*,\d{2})\s*(?:€|eur)/gi)].map(x=>x[1]);
+    if(all.length) montant=all.sort((a,b)=>num(b)-num(a))[0];
+  }
+  if(montant){ res.montant=num(montant); res.found=true; }
+
+  const per=flat.match(/(\d)(?:er|e|ème)?\s*trimestre\s*(\d{4})/i);
+  if(per){ res.trimestre=parseInt(per[1]); res.annee=parseInt(per[2]);
+           res.periode=per[0].replace(/\s+/g," "); res.found=true; }
+  const an=flat.match(/\b(20\d{2})\b/); if(!res.annee&&an) res.annee=parseInt(an[1]);
+
+  const dx=flat.match(/(?:exigib|échéance|date limite|à payer avant)[^\d]{0,20}(\d{1,2}[\/.\- ]\d{1,2}[\/.\- ]\d{2,4})/i);
+  if(dx) res.exig=parseDate(dx[1]);
+  return res;
+}
+function num(s){return parseFloat(String(s).replace(/[ .]/g,"").replace(",","."));}
+function parseDate(s){
+  const m=s.match(/(\d{1,2})[\/.\- ](\d{1,2})[\/.\- ](\d{2,4})/); if(!m) return null;
+  let[,d,mo,y]=m; if(y.length===2)y="20"+y;
+  return `${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}`;
+}
+function applyExtraction(e){
+  if(e.montant){ $("#a_tot").value=e.montant.toFixed(2); }
+  if(e.periode) $("#a_per").value=e.periode;
+  if(e.annee)   $("#a_an").value=e.annee;
+  if(e.trimestre) $("#a_tri").value=e.trimestre;
+  if(e.exig)    $("#a_ex").value=e.exig;
+}
+
+/* ============================================================
+   IMPORT DE L'HISTORIQUE (relevé depuis les PDF Vacherand + Sergic)
+   Montant de chaque appel = charge de la période (hors reports),
+   pour éviter de compter deux fois les soldes antérieurs.
+   ============================================================ */
+const CC="Charges courantes", FA="Fonds de travaux (ALUR)",
+      TX="Travaux exceptionnels", CE="Chauffage / Eau", AU="Autres";
+
+const SEED=[
+  /* ---------- APPARTEMENT (AURELIA 1) ---------- */
+  // Sergic
+  { bien:"appartement", periode:"1er trimestre 2025 (Sergic)", annee:2025, trimestre:1,
+    emission:"2024-12-17", exig:"2025-01-01", montant:953.73, paye:true, moyen:"Prélèvement",
+    syndic:"Sergic", source:"SERGIC SYNDIC/Appel de fonds 01 2025.pdf",
+    postes:[ [CC,"Charges générales",243.28],[CC,"Charges bâtiment B",73.36],
+      [CC,"Ascenseur bât B",30.88],[CE,"Chauffage / eau",430.88],[CC,"Câbles",8.92],
+      [FA,"Cotisation fonds ALUR",62.25],[TX,"Délégation architecte rénovation (échéance)",104.16] ] },
+  { bien:"appartement", periode:"Appel travaux — mars 2025 (Sergic)", annee:2025, trimestre:1,
+    emission:"2025-02-14", exig:"2025-03-01", montant:104.16, paye:true, moyen:"Prélèvement",
+    syndic:"Sergic", source:"SERGIC SYNDIC/Appel de fonds 03 2025.pdf",
+    postes:[ [TX,"Délégation architecte rénovation (échéance)",104.16] ] },
+  { bien:"appartement", periode:"2e trimestre 2025 (Sergic)", annee:2025, trimestre:2,
+    emission:"2025-03-14", exig:"2025-04-01", montant:849.57, paye:true, moyen:"Prélèvement",
+    syndic:"Sergic", source:"SERGIC SYNDIC/Appel de fonds 04 2025.pdf",
+    postes:[ [CC,"Charges générales",243.28],[CC,"Charges bâtiment B",73.36],
+      [CC,"Ascenseur bât B",30.88],[CE,"Chauffage / eau",430.88],[CC,"Câbles",8.92],
+      [FA,"Cotisation fonds ALUR",62.25] ] },
+  { bien:"appartement", periode:"Régularisation charges 2024 (Sergic)", annee:2024, trimestre:null,
+    emission:"2025-06-05", exig:"2025-07-01", montant:1003.14, paye:true, moyen:"Prélèvement",
+    syndic:"Sergic", source:"VACHERAND SYNDIC/Paiement charges/Appel régularisation charges 2024.pdf",
+    postes:[ [AU,"Régularisation annuelle des charges 2024",1003.14] ] },
+  // Vacherand
+  { bien:"appartement", periode:"3e trimestre 2025", annee:2025, trimestre:3,
+    emission:"2025-07-03", exig:"2025-07-30", montant:1117.35, paye:true, moyen:"Prélèvement",
+    syndic:"Vacherand", source:"VACHERAND SYNDIC/Paiement charges/Appel de fonds T3 2025.PDF",
+    postes:[ [CC,"Charges communes générales (+ régul.)",302.92],[CC,"Charges entrée B (+ régul.)",128.83],
+      [CC,"Charges ascenseur B (+ régul.)",35.83],[CC,"Charges Numéricable (+ régul.)",10.82],
+      [CE,"Charges chauffage eau (+ régul.)",548.68],[FA,"Fonds de travaux loi ALUR",90.27] ] },
+  { bien:"appartement", periode:"4e trimestre 2025", annee:2025, trimestre:4,
+    emission:"2025-09-24", exig:"2025-10-15", montant:944.01, paye:true, moyen:"Prélèvement",
+    syndic:"Vacherand", source:"VACHERAND SYNDIC/Paiement charges/Appel de fonds T4 2025.PDF",
+    postes:[ [CC,"Charges communes générales",263.16],[CC,"Charges entrée B",91.85],
+      [CC,"Charges ascenseur B",32.53],[CC,"Charges Numéricable",9.55],
+      [CE,"Charges chauffage eau",470.15],[FA,"Fonds de travaux loi ALUR",76.77] ] },
+  { bien:"appartement", periode:"1er trimestre 2026", annee:2026, trimestre:1,
+    emission:"2025-12-23", exig:"2026-01-15", montant:944.01, paye:true, moyen:"Prélèvement",
+    syndic:"Vacherand", source:"VACHERAND SYNDIC/Paiement charges/Appel de fonds T1 2026.PDF",
+    postes:[ [CC,"Charges communes générales",263.16],[CC,"Charges entrée B",91.85],
+      [CC,"Charges ascenseur B",32.53],[CC,"Charges Numéricable",9.55],
+      [CE,"Charges chauffage eau",470.15],[FA,"Fonds de travaux loi ALUR",76.77] ] },
+  { bien:"appartement", periode:"2e trimestre 2026", annee:2026, trimestre:2,
+    emission:"2026-03-25", exig:"2026-04-15", montant:944.01, paye:true, moyen:"Prélèvement",
+    syndic:"Vacherand", source:"VACHERAND SYNDIC/Paiement charges/Appel de fonds T2 2026.PDF",
+    postes:[ [CC,"Charges communes générales",263.16],[CC,"Charges entrée B",91.85],
+      [CC,"Charges ascenseur B",32.53],[CC,"Charges Numéricable",9.55],
+      [CE,"Charges chauffage eau",470.15],[FA,"Fonds de travaux loi ALUR",76.77] ] },
+  { bien:"appartement", periode:"Régularisation charges 2025 (Vacherand)", annee:2025, trimestre:null,
+    emission:"2026-06-05", exig:"2026-06-20", montant:521.75, paye:true, moyen:"Prélèvement",
+    syndic:"Vacherand", source:"VACHERAND SYNDIC/Paiement charges/Appel régularisation charges 2025.PDF",
+    postes:[ [AU,"Solde de la régularisation annuelle 2025",521.75] ] },
+
+  /* ---------- PARKING (PARKINGS P6 — Sergic) ---------- */
+  { bien:"parking", periode:"2e trimestre 2026", annee:2026, trimestre:2,
+    emission:"2026-03-17", exig:"2026-04-01", montant:46.57, paye:true, moyen:"Prélèvement",
+    syndic:"Sergic", source:"SERGIC SYNDIC/Appel de fonds 04 2026.pdf",
+    postes:[ [CC,"Charges générales parking",44.35],[FA,"Cotisation fonds ALUR",2.22] ] },
+];
+
+async function importHistorique(){
+  if(state.appels.length>0){ toast("Des appels existent déjà — import ignoré.",true); return; }
+  const btn=$("#btnImport"); if(btn){ btn.disabled=true; btn.textContent="Import en cours…"; }
+  const appart=state.copros.find(c=>c.type==="appartement");
+  const park  =state.copros.find(c=>c.type==="parking");
+  if(!appart||!park){ toast("Copropriétés introuvables",true); return; }
+
+  try{
+    for(const s of SEED){
+      const copro = s.bien==="parking"?park:appart;
+      const note = `Syndic : ${s.syndic}. PDF d'origine : ${s.source}`;
+      const {data,error}=await sb.from("copro_appels").insert({
+        copro_id:copro.id, periode_libelle:s.periode, annee:s.annee, trimestre:s.trimestre,
+        date_emission:s.emission, date_exigibilite:s.exig, montant_total:s.montant,
+        statut:s.paye?"paye":"en_attente", notes:note
+      }).select("id").single();
+      if(error){ toast("Erreur : "+error.message,true); continue; }
+      const appelId=data.id;
+      const ps=s.postes.map(p=>({appel_id:appelId,categorie:p[0],libelle:p[1],montant:p[2]}));
+      if(ps.length) await sb.from("copro_postes").insert(ps);
+      if(s.paye) await sb.from("copro_paiements").insert({appel_id:appelId,montant:s.montant,
+        date_paiement:s.exig,moyen:s.moyen});
+    }
+    await loadAll(); render();
+    toast("Historique importé ✓ ("+SEED.length+" appels)");
+  }catch(e){ toast("Import interrompu : "+e.message,true); }
+}
+window.importHistorique=importHistorique;
+
+boot();
+</script>
+</body>
+</html>
