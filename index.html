@@ -140,6 +140,7 @@
       <h1>Tableau de bord</h1>
       <p class="sub" id="dashSub">Vue d'ensemble de vos charges de copropriété.</p>
       <div id="importBanner"></div>
+      <div id="folderSync"></div>
       <div class="grid kpis" id="kpis"></div>
       <div class="sec card">
         <h2>Solde par copropriété</h2>
@@ -272,6 +273,7 @@ async function startApp(){
   $("#app").classList.remove("hidden");
   await loadAll();
   if(state.copros.length===0) await seedCopros();
+  try{ DIRHANDLE = await idbGet('dir') || null; }catch(e){ DIRHANDLE=null; }
   render();
 }
 
@@ -339,6 +341,26 @@ function renderDashboard(){
       <span class="muted" style="font-size:12px;margin-left:10px">Vous pourrez tout vérifier et modifier ensuite.</span>
     </div>` : "";
   const bi=$("#btnImport"); if(bi) bi.onclick=importHistorique;
+
+  // carte "Import par dossier"
+  const fs=$("#folderSync");
+  if(fs){
+    const supported = !!window.showDirectoryPicker;
+    fs.innerHTML = `<div class="card" style="margin-bottom:18px">
+      <b>📂 Import par dossier</b>
+      <p class="muted" style="margin:6px 0 12px">${ supported
+        ? (DIRHANDLE
+            ? `Dossier connecté : <b>${esc(DIRHANDLE.name)}</b>. Déposez vos PDF dans ses sous-dossiers, puis cliquez Synchroniser. La copropriété (dossier « Appartement »/« Parking ») et l'année (dossier « 2025 », « 2026 »…) sont reconnues automatiquement — les sous-dossiers sont parcourus.`
+            : `Choisissez votre dossier racine (ex. un dossier OneDrive). Organisez-le par copropriété puis par année (ex. <code>Appartement/2026/</code>) : tout est classé automatiquement, sous-dossiers compris.`)
+        : `Fonction disponible sur <b>Chrome</b> ou <b>Edge</b>, via l'adresse <b>https</b> du site (pas sur Safari, ni en ouvrant le fichier en local).` }</p>
+      ${ supported ? `
+        <button id="btnSync">${DIRHANDLE?'🔄 Synchroniser maintenant':'Choisir un dossier'}</button>
+        ${DIRHANDLE?`<button class="ghost sm" id="btnPick" style="margin-left:8px">Changer de dossier</button>`:''}
+        <span id="syncStatus" class="muted" style="font-size:13px;margin-left:10px"></span>` : '' }
+    </div>`;
+    const bs=$("#btnSync"); if(bs) bs.onclick=()=>DIRHANDLE?syncFolder():pickFolder();
+    const bp=$("#btnPick"); if(bp) bp.onclick=pickFolder;
+  }
 
   const total=state.appels.reduce((s,a)=>s+Number(a.montant_total||0),0);
   const paye =state.appels.reduce((s,a)=>s+Number(a.total_paye||0),0);
@@ -526,8 +548,9 @@ window.openAppel=(id)=>{
     ${id?paiementsBlock(a):""}
 
     <div class="field"><label>Notes</label><textarea id="a_notes" rows="2">${esc(a.notes||"")}</textarea></div>
-    ${a.pdf_path?`<p class="muted" style="font-size:13px">📎 PDF joint —
-       <a href="#" onclick="dlPdf('${esc(a.pdf_path)}');return false">télécharger</a></p>`:""}
+    ${a.pdf_path?`<p class="muted" style="font-size:13px">📎 Document : ${esc(a.pdf_path.replace(/^local:/,""))}
+       — <a href="#" onclick="openAppelPdf('${a.id}');return false">ouvrir</a>
+       <span style="font-size:12px">(depuis votre dossier local)</span></p>`:""}
 
     <div class="bar" style="margin-top:8px">
       ${id?`<button class="danger" onclick="delAppel('${id}')">Supprimer</button>`:""}
@@ -610,10 +633,8 @@ window.saveAppel=async(id)=>{
   if(!payload.copro_id) return toast("Choisissez une copropriété",true);
 
   if(window.__pdfFile){
-    const path=`${USER.id}/${Date.now()}_${window.__pdfFile.name.replace(/[^\w.\-]/g,"_")}`;
-    const up=await sb.storage.from("copro-appels-pdf").upload(path,window.__pdfFile);
-    if(up.error) toast("PDF non envoyé : "+up.error.message,true);
-    else payload.pdf_path=path;
+    // Pas de téléversement : on référence le fichier dans votre dossier local.
+    payload.pdf_path = "local:"+window.__pdfFile.name;
   }
 
   let appelId=id;
@@ -635,11 +656,28 @@ window.delAppel=async(id)=>{
   closeModal(); await loadAll(); render(); toast("Supprimé");
 };
 
-window.dlPdf=async(path)=>{
-  const {data,error}=await sb.storage.from("copro-appels-pdf").createSignedUrl(path,120);
+window.openAppelPdf=async(id)=>{
+  const a=state.appels.find(x=>x.id===id); if(!a||!a.pdf_path) return;
+  if(a.pdf_path.startsWith("local:")) return openLocalPdf(a.pdf_path.slice(6));
+  // ancien format (PDF stocké sur Supabase) — rétro-compatibilité
+  const {data,error}=await sb.storage.from("copro-appels-pdf").createSignedUrl(a.pdf_path,120);
   if(error) return toast(error.message,true);
   window.open(data.signedUrl,"_blank");
 };
+async function openLocalPdf(rel){
+  if(!DIRHANDLE){ toast("Connectez d'abord votre dossier (carte « Import par dossier »)",true); return; }
+  if(!(await ensurePerm(DIRHANDLE))){ toast("Accès au dossier refusé",true); return; }
+  try{
+    const parts=rel.split("/");
+    let dir=DIRHANDLE;
+    for(let i=0;i<parts.length-1;i++) dir=await dir.getDirectoryHandle(parts[i]);
+    const fh=await dir.getFileHandle(parts[parts.length-1]);
+    const file=await fh.getFile();
+    const url=URL.createObjectURL(file);
+    window.open(url,"_blank");
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(e){ toast("Fichier introuvable dans le dossier connecté : "+rel,true); }
+}
 
 /* ============================================================
    IMPORT / LECTURE PDF
@@ -668,10 +706,11 @@ async function handlePdf(file){
     if(window.__isNew){
       const ext=extractFromText(text);
       applyExtraction(ext);
-      $("#pdfStatus").innerHTML=`✅ PDF « ${esc(file.name)} » lu et joint. `+
-        (ext.found?`Champs pré-remplis — <b>vérifiez puis enregistrez</b>.`:`Texte non reconnu automatiquement : saisissez les montants manuellement (le PDF reste joint).`);
+      $("#pdfStatus").innerHTML=`✅ PDF « ${esc(file.name)} » lu. `+
+        (ext.found?`Champs pré-remplis — <b>vérifiez puis enregistrez</b>.`:`Texte non reconnu : saisissez les montants à la main.`)+
+        `<br><span style="font-size:12px">Le fichier reste dans votre dossier ; rangez-le dans le dossier connecté pour pouvoir le rouvrir depuis l'app.</span>`;
     }else{
-      $("#pdfStatus").innerHTML=`✅ PDF « ${esc(file.name)} » prêt à être joint. <b>Cliquez Enregistrer</b> pour l'attacher à cet appel.`;
+      $("#pdfStatus").innerHTML=`✅ PDF « ${esc(file.name)} » référencé. <b>Cliquez Enregistrer</b>.`;
     }
   }catch(e){
     $("#pdfStatus").textContent="Lecture impossible (PDF peut-être scanné/image). Le fichier sera tout de même joint ; saisissez les montants à la main.";
@@ -809,6 +848,143 @@ async function importHistorique(){
   }catch(e){ toast("Import interrompu : "+e.message,true); }
 }
 window.importHistorique=importHistorique;
+
+/* ============================================================
+   IMPORT PAR DOSSIER (File System Access API — Chrome/Edge)
+   On choisit un dossier une fois ; un clic importe les nouveaux
+   PDF (détection appartement/parking, anti-doublon par nom de
+   fichier, PDF joint, marqué "à vérifier").
+   ============================================================ */
+let DIRHANDLE = null;
+
+// --- mémorisation du dossier choisi (IndexedDB) ---
+function idbOpen(){return new Promise((res,rej)=>{
+  const r=indexedDB.open('copro_kv',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('kv');
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
+async function idbGet(k){try{const db=await idbOpen();return await new Promise((res,rej)=>{
+  const t=db.transaction('kv','readonly').objectStore('kv').get(k);
+  t.onsuccess=()=>res(t.result); t.onerror=()=>rej(t.error);});}catch(e){return null;}}
+async function idbSet(k,v){try{const db=await idbOpen();return await new Promise((res,rej)=>{
+  const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').put(v,k);
+  tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);});}catch(e){}}
+
+async function pickFolder(){
+  if(!window.showDirectoryPicker){ toast("Disponible sur Chrome/Edge (https)",true); return; }
+  try{
+    DIRHANDLE = await window.showDirectoryPicker({mode:'read'});
+    await idbSet('dir', DIRHANDLE);
+    renderDashboard();
+    toast("Dossier connecté ✓ — cliquez Synchroniser");
+  }catch(e){ /* annulé par l'utilisateur */ }
+}
+async function ensurePerm(h){
+  const opt={mode:'read'};
+  if((await h.queryPermission(opt))==='granted') return true;
+  return (await h.requestPermission(opt))==='granted';
+}
+
+// Parcourt le dossier ET ses sous-dossiers, en gardant le chemin relatif
+async function* walkDir(dir, prefix=""){
+  for await (const e of dir.values()){
+    const rel = prefix ? prefix+"/"+e.name : e.name;
+    if(e.kind==='directory') yield* walkDir(e, rel);
+    else yield { entry:e, rel };
+  }
+}
+function coproFromPath(rel){
+  const segs=rel.toLowerCase().split("/");
+  if(segs.some(s=>s.includes("parking"))) return 'parking';
+  if(segs.some(s=>s.includes("appart"))) return 'appartement';
+  return null;
+}
+function yearFromPath(rel){
+  for(const s of rel.split("/")) if(/^20\d{2}$/.test(s.trim())) return +s.trim();
+  return null;
+}
+
+async function syncFolder(){
+  if(!DIRHANDLE) return pickFolder();
+  if(!(await ensurePerm(DIRHANDLE))){ toast("Accès au dossier refusé",true); return; }
+  const stat=$("#syncStatus");
+  // chemins déjà importés (référence "local:<chemin>")
+  const known=new Set();
+  state.appels.forEach(a=>{ if(a.pdf_path && a.pdf_path.startsWith("local:")) known.add(a.pdf_path.slice(6)); });
+  let added=0, skipped=0, failed=0;
+  try{
+    for await (const {entry,rel} of walkDir(DIRHANDLE)){
+      if(!/\.pdf$/i.test(entry.name)) continue;
+      if(known.has(rel)){ skipped++; continue; }
+      if(stat) stat.textContent=`Lecture de ${rel}…`;
+      try{ const file=await entry.getFile(); await importOnePdf(file, rel); added++; }
+      catch(e){ console.error("Import PDF échoué :",rel,e); failed++; }
+    }
+  }catch(e){ toast("Lecture du dossier impossible : "+e.message,true); return; }
+  if(stat) stat.textContent="";
+  await loadAll(); render();
+  toast(`Synchronisation : ${added} ajouté(s), ${skipped} déjà présent(s)`+(failed?`, ${failed} illisible(s)`:'')+" ✓");
+}
+
+async function importOnePdf(file, rel){
+  rel = rel || file.name;
+  const buf=await file.arrayBuffer();
+  const pdf=await window.__pdfjs.getDocument({data:buf}).promise;
+  let text="";
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const tc=await page.getTextContent();
+    text+=tc.items.map(it=>it.str).join(" ")+"\n";
+  }
+  const ex=extractAppel(text);
+  // La copropriété et l'année viennent EN PRIORITÉ de l'arborescence des dossiers
+  const bien  = coproFromPath(rel) || ex.bien;
+  const annee = yearFromPath(rel)  || ex.annee || null;
+  const copro = state.copros.find(c=> bien==='parking' ? c.type==='parking' : c.type==='appartement')
+              || state.copros[0];
+  if(!copro) throw new Error("aucune copropriété");
+  // Le PDF reste dans votre dossier local : on garde juste le chemin relatif.
+  const pdf_path = "local:"+rel;
+  const notes=`⚠️ Importé automatiquement — vérifiez le montant. `+
+              `Syndic : ${ex.syndic||'?'} | Fichier : ${rel}`;
+  const {error}=await sb.from("copro_appels").insert({
+    copro_id:copro.id, periode_libelle:ex.periode||null, annee:annee,
+    trimestre:ex.trimestre||null, date_emission:ex.emission||null,
+    date_exigibilite:ex.exig||null, montant_total:ex.montant||0,
+    statut:'en_attente', pdf_path, notes
+  });
+  if(error) throw error;
+}
+
+const MOIS={janvier:1,"février":2,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,
+            "août":8,aout:8,septembre:9,octobre:10,novembre:11,"décembre":12,decembre:12};
+
+/* Extraction calibrée Vacherand + Sergic (best-effort, à vérifier) */
+function extractAppel(t){
+  const flat=t.replace(/\s+/g," ");
+  const NUM="([\\d][\\d  .\\u00a0]*,\\d{2})";
+  const r={syndic:null, bien:'appartement', montant:null};
+  if(/sergic/i.test(flat))    r.syndic='Sergic';
+  if(/vacherand/i.test(flat)) r.syndic='Vacherand';
+  if(/PARKINGS?\s*P\s*6|14\s*\/\s*0408|23433/i.test(flat)) r.bien='parking';
+
+  let m;
+  if(m=flat.match(/APPEL DE FONDS\s*(\d)\s*°?\s*T(?:RIM)?\.?\s*(20\d{2})/i)){
+    r.trimestre=+m[1]; r.annee=+m[2]; r.periode=`${m[1]}e trimestre ${m[2]}`;
+  } else if(m=flat.match(/fonds[^0-9]{0,14}ance du 1er\s+([A-Za-zûôéèêàÉ]+)\s+(20\d{2})/i)){
+    const mo=MOIS[m[1].toLowerCase()]; r.annee=+m[2];
+    if(mo){ r.trimestre=Math.ceil(mo/3); r.periode=`Échéance ${m[1].toLowerCase()} ${m[2]}`; }
+  }
+
+  if(m=flat.match(/avant le\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i)) r.exig=parseDate(m[1]);
+  else if(m=flat.match(/POUR LE\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i)) r.exig=parseDate(m[1]);
+  if(m=flat.match(/LILLE,?\s*le\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i)) r.emission=parseDate(m[1]);
+
+  if(r.syndic==='Vacherand' && (m=flat.match(new RegExp("Total g[eé]n[eé]ral\\s+"+NUM,"i")))) r.montant=num(m[1]);
+  if(r.montant==null && (m=flat.match(new RegExp("SOMME A REGLER(?: POUR LE \\d{1,2}\\/\\d{1,2}\\/\\d{2,4})?\\s+"+NUM,"i")))) r.montant=num(m[1]);
+  if(r.montant==null && (m=flat.match(new RegExp("Somme à régler\\s+"+NUM,"i")))) r.montant=num(m[1]);
+  return r;
+}
+window.pickFolder=pickFolder; window.syncFolder=syncFolder;
 
 boot();
 </script>
