@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Suivi copro</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
+<style>
+  :root { --bg:#0f172a; --card:#ffffff; --text:#0f172a; --muted:#64748b; --accent:#2563eb; --border:#cbd5e1; --err:#dc2626; }
+  @media (prefers-color-scheme: dark) { :root { --card:#1e293b; --text:#f1f5f9; --muted:#94a3b8; --border:#475569; --err:#f87171; } }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px;
+         background:var(--bg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .box { width:100%; max-width:360px; background:var(--card); color:var(--text); border-radius:14px; padding:28px;
+         box-shadow:0 20px 50px rgba(0,0,0,.35); }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p { margin:0 0 18px; color:var(--muted); font-size:14px; }
+  label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin:12px 0 6px; text-transform:uppercase; letter-spacing:.04em; }
+  input { width:100%; padding:11px 12px; border:1px solid var(--border); border-radius:8px; font-size:16px; background:transparent; color:var(--text); }
+  input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  button { width:100%; margin-top:20px; padding:12px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:wait; }
+  #msg { min-height:20px; margin-top:12px; font-size:13px; color:var(--err); }
+  #wait { color:#cbd5e1; font-size:14px; }
+</style>
+</head>
+<body>
+<div id="wait">Chargement…</div>
+<form class="box" id="f" hidden>
+  <h1>🔒 Accès sécurisé</h1>
+  <p>Identifiez-vous pour continuer.</p>
+  <label for="e">Email</label>
+  <input id="e" type="email" autocomplete="username" required>
+  <label for="p">Mot de passe</label>
+  <input id="p" type="password" autocomplete="current-password" required>
+  <button id="b" type="submit">Se connecter</button>
+  <div id="msg" role="alert"></div>
+</form>
+<script>
+(function () {
+  // Tout est enfermé dans cette fonction : aucune variable globale ne doit
+  // entrer en conflit avec celles de l'application chargée ensuite.
+  var APP = 'copro';
+  var SB_URL = 'https://hnwykzwlixhednsiymny.supabase.co';
+  var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhud3lrendsaXhoZWRuc2l5bW55Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODY1NjIsImV4cCI6MjA5NjE2MjU2Mn0.JvLwwH1UMot9BrQsx_yQuVin5pKM8FldSG9C95kMDDU';
+  var client = window.supabase.createClient(SB_URL, SB_KEY, { auth: { autoRefreshToken: false, detectSessionInUrl: false } });
+  var form = document.getElementById('f'), btn = document.getElementById('b'), msg = document.getElementById('msg'), wait = document.getElementById('wait');
+
+  function showForm(text) {
+    wait.hidden = true; form.hidden = false;
+    msg.textContent = text || ''; btn.disabled = false; btn.textContent = 'Se connecter';
+  }
+
+  function loadScript(src, attrs) {
+    return new Promise(function (resolve) {
+      var s = document.createElement('script');
+      for (var i = 0; i < attrs.length; i++) s.setAttribute(attrs[i].name, attrs[i].value);
+      s.onload = s.onerror = function () { resolve(); };
+      document.body.appendChild(s);
+    });
+  }
+
+  // Remplace la page de connexion par l'application, scripts compris, dans l'ordre.
+  async function render(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var scripts = Array.prototype.slice.call(doc.querySelectorAll('script'));
+    scripts.forEach(function (s) { s.parentNode.removeChild(s); });
+    document.documentElement.setAttribute('lang', doc.documentElement.getAttribute('lang') || 'fr');
+    while (document.head.firstChild) document.head.removeChild(document.head.firstChild);
+    Array.prototype.slice.call(doc.head.childNodes).forEach(function (n) { document.head.appendChild(document.adoptNode(n)); });
+    document.documentElement.replaceChild(document.adoptNode(doc.body), document.body);
+    for (var i = 0; i < scripts.length; i++) {
+      var old = scripts[i];
+      if (old.src) {
+        await loadScript(old.getAttribute('src'), old.attributes);
+      } else {
+        var s = document.createElement('script');
+        for (var j = 0; j < old.attributes.length; j++) s.setAttribute(old.attributes[j].name, old.attributes[j].value);
+        s.textContent = old.textContent;
+        document.body.appendChild(s);
+      }
+    }
+  }
+
+  async function loadApp() {
+    wait.hidden = false; form.hidden = true;
+    var res = await client.from('app_code').select('html').eq('name', APP).maybeSingle();
+    if (res.error || !res.data) {
+      await client.auth.signOut();
+      showForm(res.error ? 'Session expirée, reconnectez-vous.' : 'Accès refusé.');
+      return;
+    }
+    try { localStorage.setItem('cb_sb_url', SB_URL); localStorage.setItem('cb_sb_key', SB_KEY); } catch (e) {}
+    await render(res.data.html);
+  }
+
+  form.addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    btn.disabled = true; btn.textContent = 'Connexion…'; msg.textContent = '';
+    var r = await client.auth.signInWithPassword({ email: document.getElementById('e').value.trim(), password: document.getElementById('p').value });
+    if (r.error) { showForm('Identifiants incorrects.'); return; }
+    document.getElementById('p').value = '';
+    await loadApp();
+  });
+
+  client.auth.getSession().then(function (r) {
+    if (r.data && r.data.session) loadApp(); else showForm();
+  }, function () { showForm(); });
+})();
+</script>
+</body>
+</html>
